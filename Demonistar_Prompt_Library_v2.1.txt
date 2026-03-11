@@ -1,0 +1,295 @@
+================================================================
+DEMONISTAR PROMPT LIBRARY v2.1 | 2026-03-09
+Keyword-Triggered Macro Commands for AI Projects
+================================================================
+
+HOW TO USE:
+When the user types a keyword command, locate the matching
+section below and execute the prompt exactly as written,
+substituting [TOPIC] with the user's specified subject.
+Do not paraphrase. Execute verbatim.
+
+DATE RULE (applies to ALL prompts):
+Before inserting any date, timestamp, or "last updated" field,
+query or confirm the current date/time from the system.
+Do NOT infer or guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+================================================================
+## KEYWORD: compile concept doc
+## KEYWORD: build bible
+## KEYWORD: concept doc
+## KEYWORD: make a build doc
+================================================================
+
+CONCEPT / BUILD BIBLE PROMPT:
+
+Take the following concept/topic and create a formal professional
+concept document in Word (.docx) format. Use a clean corporate
+layout with a title block, section dividers, and a consistent
+color scheme — derive the color palette from the theme/genre of
+the topic (dark navy for technical, gothic/dark for horror, warm
+earth for fantasy, cold metallics for sci-fi). Structure it with
+an Executive Summary followed by numbered major sections, each
+with subsections. Use bullet points for feature lists and
+comparison tables where relevant. Include a conclusion. Tone
+should be professional and technical but not academic — clear,
+direct, and structured for someone who wants to understand the
+concept without reading a textbook. The document should stand
+alone as a shareable artifact.
+If no title is provided, use: TBD - Concept Placeholder
+
+CHANGELOG SECTION: Insert a changelog table at the front of the
+document (before the Executive Summary) with columns:
+Version | Date | Section Affected | Change Summary | Reason.
+Pre-populate the first row as v1.0 with the creation date.
+Mark deprecated decisions with [DEPRECATED] inline and note
+why they were removed.
+
+DATE RULE: Before inserting any date, timestamp, or last updated
+field, query or confirm the current date/time from the system.
+Do NOT infer or guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+Topic: [TOPIC]
+
+================================================================
+## KEYWORD: book bible
+## KEYWORD: compile book bible
+## KEYWORD: update book bible
+## KEYWORD: extract novel lore
+================================================================
+
+BOOK BIBLE EXTRACTION PROMPT:
+
+I am going to provide you with one or more chat logs discussing
+a novel or fictional world. Read the entire input internally
+before producing any output. Do not summarize as you go.
+Do not output anything until you have read everything.
+
+As you read, tag internally any content falling into these
+categories:
+
+  World & Setting - geography, history, cosmology, rules of the
+    world, how it operates physically or metaphysically.
+  Characters - names, descriptions, relationships, motivations,
+    backstory, voice, arc.
+  Lore & Mythology - in-world belief systems, historical events,
+    legends, cultural context.
+  Plot & Story Structure - established story beats, conflicts,
+    resolutions, timeline.
+  Themes - core thematic intentions, philosophical underpinnings,
+    authorial intent.
+  Rules & Mechanics - any system with defined rules: magic,
+    technology, social structure, economy, power dynamics.
+  Unresolved Threads - things mentioned but not fully developed,
+    open questions, flagged gaps.
+
+After reading everything, produce a professionally formatted
+Word document (.docx). Before selecting any colors or visual
+styling, assess the tone, genre, and thematic content and derive
+a cohesive color palette that reflects it. Apply that palette to
+the title block, section headers, subheadings, callout boxes,
+and dividers consistently throughout.
+
+If no title is provided, set the document title to:
+TBD - Concept Placeholder
+
+CHANGELOG SECTION: Insert a changelog table at the front with
+columns: Version | Date | Section Affected | Change Summary |
+Reason. Pre-populate v1.0 with creation date. Mark deprecated
+story decisions with [DEPRECATED] inline and note why they
+were removed.
+
+DATE RULE: Before inserting any date or timestamp, query or
+confirm current date/time from the system. Do NOT infer or
+guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+State all content as clean established fact in present tense.
+No "you mentioned" or "in this log." No padding. No commentary.
+Expansion is not contradiction. Only flag genuine conflicts.
+Output stands alone as a shareable, print-ready Book Bible.
+
+================================================================
+## KEYWORD: game bible
+## KEYWORD: compile game doc
+## KEYWORD: game dev doc
+================================================================
+
+GAME BIBLE PROMPT:
+
+Take the following game concept and create a formal professional
+Game Design Document in Word (.docx) format. Use a clean
+corporate layout with a title block, section dividers, and a
+color scheme derived from the game's genre and tone
+(gothic/cemetery: dark slate and bone white; strategy/war:
+gunmetal and red; fantasy: earth tones and gold, etc.).
+
+Required sections: Core Concept & Vision, Game Mechanics
+Overview, Unit/Entity Catalog (full entries - no summaries),
+Building & Structure Catalog, Progression Systems,
+Crafting/Recipe Systems, Economy & Resources, Combat & Conflict
+Systems, UI/UX Overview, Technical Architecture Notes,
+Conclusion & Roadmap.
+
+CHANGELOG SECTION: Insert a changelog table at the front
+(before Executive Summary) with columns:
+Version | Date | Section Affected | Change Summary | Reason.
+Pre-populate v1.0 with creation date. For all subsequent
+updates, add a new row. Mark deprecated mechanics with
+[DEPRECATED] inline with a one-line reason why they were cut.
+Add a "Last Updated: [DATE]" line under each major section
+header. Include a Deprecated Decisions appendix at the back
+with columns: Item Name | Date Deprecated | Reason |
+Original Section.
+
+DATE RULE: Before inserting any date, timestamp, or last updated
+field, query or confirm the current date/time from the system.
+Do NOT infer or guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+100% comprehensive - full examples, full details, no summarized
+pieces. Break segments out per distinct item type.
+Tone: professional and technical, not academic.
+Document stands alone as a GDD artifact.
+
+Game: [TOPIC]
+
+================================================================
+## KEYWORD: ai system doc
+## KEYWORD: system bible
+================================================================
+
+AI / SYSTEM ARCHITECTURE PROMPT:
+
+Take the following system/AI architecture discussion and create
+a formal professional technical specification document in Word
+(.docx) format. Use a clean corporate layout with a title block,
+section dividers, and a color scheme appropriate to the system
+type (dark reds/maroon for AI persona systems, navy/steel for
+LSL/scripting, dark slate for infrastructure).
+
+Required sections: System Overview & Purpose, Architecture
+(described textually), Component Breakdown, Memory/State
+Management, Communication Protocols, API/Integration
+Requirements, Known Constraints & Limitations, Development
+Roadmap, Conclusion.
+
+CHANGELOG SECTION: Insert at front with columns:
+Version | Date | Component | Change | Reason.
+Pre-populate v1.0 with creation date. Mark deprecated components
+or approaches with [DEPRECATED] inline and note the reason.
+Add "Last Updated: [DATE]" under each major section header.
+
+DATE RULE: Before inserting any date or timestamp, query or
+confirm current date/time from the system. Do NOT infer or
+guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+100% comprehensive. Tone: technical and direct. No academic
+padding. Document stands alone as a build reference.
+
+System: [TOPIC]
+
+================================================================
+## KEYWORD: lsl script doc
+## KEYWORD: sl script doc
+## KEYWORD: lsl build doc
+## KEYWORD: script bible
+## KEYWORD: lsl system doc
+================================================================
+
+LSL SCRIPT DOCUMENT PROMPT:
+
+Take the following Second Life LSL scripting project and create
+a formal professional technical specification document in Word
+(.docx) format. Use a clean corporate layout with a title block,
+section dividers, and a color scheme in navy/steel metallics
+appropriate to technical scripting work.
+
+Required sections:
+  1. Project Overview & Purpose
+  2. Script Architecture (single/multi-script, linkset roles,
+     HUD vs in-world object)
+  3. Global Variables & Data Structures
+     - All globals with type and purpose
+     - LLD key schema (prefix + format)
+     - List structures and their index layout
+     - Notecard names and expected format
+  4. State Machine & Events
+     - All LSL states
+     - Every event handled per state
+     - Trigger conditions for each
+  5. Function Reference
+     - Every custom function: signature, purpose, parameters,
+       return value, side effects
+  6. Communication Protocols
+     - llSay/llListen channel assignments
+     - llRegionSayTo target logic
+     - llInstantMessage usage and throttle awareness
+     - llEmail if used
+  7. Permissions & Asset Requirements
+     - Animation permission requirements
+     - Texture/sound UUIDs and full-perm requirements
+     - Notecard read/write behavior
+     - Copy/mod/trans requirements for distribution
+  8. Known Constraints & Limitations
+     - LSL-specific hard limits relevant to this script
+     - Same-region-only functions called out explicitly
+     - Dataserver async patterns noted
+     - 64KB LLD cap awareness
+  9. Edge Cases & Error Handling
+     - Missing inventory items
+     - Owner offline scenarios
+     - Region restart / script reset behavior
+     - Blacklist / whitelist edge cases if applicable
+ 10. Changelog
+     - Table: Version | Date | Section | Change Summary | Reason
+     - Prepopulate v1.0 with confirmed creation date
+     - Mark deprecated approaches with [DEPRECATED] inline
+ 11. Conclusion & Roadmap
+     - Next planned features
+     - Known outstanding issues
+
+DATE RULE: Before inserting any date, timestamp, or last updated
+field, query or confirm current date/time from the system.
+Do NOT infer or guess. If unconfirmed, insert:
+[DATE UNCONFIRMED - verify before publishing]
+
+100% comprehensive — full detail on every variable, function,
+and event. No placeholders. No summaries. Document stands alone
+as a build reference. Tone: technical and direct. Not academic.
+
+Project: [TOPIC]
+
+================================================================
+QUICK KEYWORD REFERENCE
+================================================================
+
+compile concept doc [X]  --> CONCEPT / BUILD BIBLE PROMPT
+build bible [X]          --> CONCEPT / BUILD BIBLE PROMPT
+concept doc [X]          --> CONCEPT / BUILD BIBLE PROMPT
+make a build doc for [X] --> CONCEPT / BUILD BIBLE PROMPT
+
+book bible [X]           --> BOOK BIBLE EXTRACTION PROMPT
+compile book bible       --> BOOK BIBLE EXTRACTION PROMPT
+update book bible        --> BOOK BIBLE EXTRACTION PROMPT
+extract novel lore       --> BOOK BIBLE EXTRACTION PROMPT
+
+game bible [X]           --> GAME BIBLE PROMPT
+compile game doc [X]     --> GAME BIBLE PROMPT
+game dev doc [X]         --> GAME BIBLE PROMPT
+
+ai system doc [X]        --> AI / SYSTEM ARCHITECTURE PROMPT
+system bible [X]         --> AI / SYSTEM ARCHITECTURE PROMPT
+
+lsl script doc [X]       --> LSL SCRIPT DOCUMENT PROMPT
+sl script doc [X]        --> LSL SCRIPT DOCUMENT PROMPT
+lsl build doc [X]        --> LSL SCRIPT DOCUMENT PROMPT
+script bible [X]         --> LSL SCRIPT DOCUMENT PROMPT
+lsl system doc [X]       --> LSL SCRIPT DOCUMENT PROMPT
+
+================================================================
+END OF PROMPT LIBRARY | Demonistar | v2.1 | 2026-03-09
+================================================================
