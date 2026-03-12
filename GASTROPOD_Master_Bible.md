@@ -623,3 +623,289 @@ A separate "Drone Battery" object with 10 child prims (named `1` through `10`):
 ---
 
 *Section 4 of 10 complete*
+
+---
+
+## 5. Movement System
+
+### Approach History — What Was Rejected
+
+Before the final system, several movement approaches were tried and abandoned:
+
+| Approach | Reason Rejected |
+|----------|----------------|
+| Physics-based movement | Object flopped, lost orientation, face dragged on ground, rotation spun to non-zero X/Y |
+| `llMoveToTarget()` | Requires physics (rejected for same reasons) |
+| Random roaming | Caused scope errors in LSL, unpredictable path, hard to control |
+| `llSetRegionPos()` for patrol | Teleports instantly — no smooth movement |
+
+---
+
+### Adopted Approach: Pre-Planned Notecard Waypoint System
+
+- Owner **walks a path** with the Pathway HUD worn, stopping at each desired point to record it
+- Coordinates stored in a notecard named **"Tour"** inside the drone
+- Drone follows waypoints in sequence: `0 → 1 → 2 → ... → N → 0` (loops forever)
+- `llSetKeyframedMotion()` provides smooth horizontal movement between waypoints
+- No collision detection needed — path is pre-walked and confirmed clear by the owner
+
+---
+
+### Movement Constants
+
+```lsl
+string NOTECARD_NAME = "Tour";
+float MOVEMENT_SPEED = 2.0;          // meters per second (normal)
+float HOVER_HEIGHT = 0.25;           // meters above ground during patrol
+float height_change_threshold = 1.0; // minimum terrain delta to trigger rise/lower
+```
+
+---
+
+### Z-Axis Rule (Critical)
+
+The drone **never changes its Z coordinate** during normal patrol:
+- Z is locked to the `ground_level` value recorded when the drone was rezzed
+- During movement: `Z = ground_level.z + HOVER_HEIGHT` (0.25m above ground)
+- During idle/docked: `Z = ground_level.z` (on the ground)
+- `llSetRegionPos()` is used **only** for height adjustments (rise/lower), not horizontal patrol
+
+---
+
+### Timer Intervals
+
+| Activity | Timer Interval |
+|----------|---------------|
+| Patrol (between waypoint checks) | 1.0 second |
+| Rising sequence | 0.1 second |
+| Lowering sequence | 0.1 second |
+
+---
+
+### Rise / Lower Sequences
+
+The drone rises before patrolling and lowers when stopping. Each takes 3 seconds:
+
+```
+Rise: 0.0m → 0.25m over 3 seconds (0.1s timer, 0.01m increments)
+Lower: 0.25m → 0.0m over 3 seconds (same rate in reverse)
+```
+
+- Timer fires at 0.1s intervals during rise/lower
+- Height calculated proportionally: `current_height = (rise_timer / 3.0) * HOVER_HEIGHT`
+- Rise complete → starts patrol timer at 1.0s
+- Lower complete → stops timer entirely
+
+---
+
+### Waypoint Advancement
+
+When the drone reaches the current waypoint (within 0.5m threshold):
+```lsl
+current_waypoint++;
+if (current_waypoint >= total_waypoints)
+{
+    current_waypoint = 0;
+}
+```
+
+---
+
+### Rotation
+
+Drone uses **Z-axis only** rotation to face the direction of travel:
+```lsl
+vector direction = llVecNorm(movement);
+float z_angle = llAtan2(direction.y, direction.x);
+rotation new_rot = llEuler2Rot(<0.0, 0.0, z_angle>);
+llSetRot(new_rot);
+```
+
+Compass mapping (radians):
+- `0.0` = facing East
+- `1.57` = facing North (π/2)
+- `3.14` = facing West (π)
+- `4.71` = facing South (3π/2)
+- `0.785` = NE, `2.36` = NW, `3.93` = SW, `5.49` = SE
+
+---
+
+### Emergency Mode Speed
+
+When Power Script sends `EMERGENCY_MODE`:
+- Speed reduced to **50% of normal** = 1.0 m/s
+- Power consumption increased to 200%
+- Drone continues patrol (does not stop)
+
+When Power Script sends `NORMAL_MODE`:
+- Speed restored to 2.0 m/s
+- Power consumption restored to 100%
+
+---
+
+### Height Adjustment (Bridge Crossing)
+
+Each waypoint in the Tour notecard stores a terrain Z value (the third column). The Movement Script uses this to handle elevation changes:
+
+1. Movement Script tracks `working_terrain_level` (current terrain Z)
+2. At each waypoint: compare `working_terrain_level` vs next waypoint's terrain Z
+3. If difference > `height_change_threshold` (1.0m): trigger rise before crossing, lower after
+4. **v4.0.4 fix — Delayed lowering:** The lower command is delayed by +1 waypoint to prevent premature descent mid-bridge (flag: `lowering_delayed`)
+
+---
+
+### Tour Notecard Format
+
+Notecard named **"Tour"** inside the drone:
+
+```
+# Route: "Test Patrol"
+# Generated: 2025-09-04 18:58:00
+RP_MODE: YES
+ROTATION_AXIS: Z
+HOME: 112, 140
+START: 107, 141, 3.14159
+WAYPOINTS:
+107, 157, 0.0
+111, 166, 0.785
+142, 166, 1.57
+142, 124, 3.14
+122, 108, 3.14
+116, 108, 4.71
+114, 126, 5.49
+END: 107, 141
+```
+
+**Field notes:**
+- `RP_MODE: YES/NO` — controls whether status messages are RP emotes or debug output
+- `ROTATION_AXIS: Z` — which axis controls the drone's facing direction (snail uses Z)
+- `HOME:` line — became **obsolete** with dock pairing system (dock provides coordinates dynamically)
+- Waypoint columns: `X, Y, terrain_Z` (the terrain_Z is used for bridge/height detection)
+- Angle column in START line is facing direction in radians
+
+---
+
+### Notecard Change Detection (v4.1.0+)
+
+Movement Script monitors `changed()` event:
+```lsl
+changed(integer change)
+{
+    if (change & CHANGED_INVENTORY)
+    {
+        key current_key = llGetInventoryKey(NOTECARD_NAME);
+        if (current_key != stored_notecard_key && current_key != NULL_KEY)
+        {
+            stored_notecard_key = current_key;
+            reload_notecard();  // clears old waypoints, preserves position state
+        }
+    }
+}
+```
+
+Manual force-reload: `/<channel> reload` command → Config sends `RELOAD_NOTECARD` link message.
+
+---
+
+### State Persistence (llLinksetData Keys)
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `"patrol_active"` | "0"/"1"/"" | Patrol state: 0=paused, 1=patrolling, ""=fresh |
+| `"current_waypoint"` | integer string | Current waypoint index |
+| `"working_terrain"` | float string | Current terrain level |
+| `"current_power"` | float string | Current power level |
+| `"emergency_mode"` | integer string | Emergency mode flag |
+| `"saved_position"` | vector string | Last known position |
+
+---
+
+### Resume Behavior on Script Reset
+
+| Saved State | Behavior |
+|-------------|----------|
+| No saved state (fresh) | Waits for manual start command |
+| `patrol_active = "0"` (paused) | Loads position, waits for start command |
+| `patrol_active = "1"` (active) | Auto-resumes from saved waypoint on script reset |
+
+Resume sequence output:
+```
+Resume enabled - will return to WP16
+Rising...
+Starting patrol
+TP: Resume successful - starting movement in 3 seconds
+```
+
+---
+
+### Resume TP Issue (Critical Design Note)
+
+`llSetRegionPos()` behaves differently depending on context:
+- In **link_message handler**: works reliably — drone TPs to target position
+- In **timer handler**: returns TRUE but drone does NOT move
+
+**Working solution:** Timer sends a link message to self, resume TP executes in the link_message handler:
+```lsl
+// Timer context (unreliable for TP):
+llMessageLinked(LINK_THIS, saved_waypoint, "RESUME_TP", NULL_KEY);
+
+// link_message handler (reliable for TP):
+if (str == "RESUME_TP")
+{
+    current_waypoint = num;
+    llSetRegionPos(saved_position);
+}
+```
+
+---
+
+### Reset Command
+
+Chat commands on the paired channel:
+- `/<channel> reset` — clears all llLinksetData, forces fresh start, resets script
+- `/<channel> fresh` — same as reset (alias)
+
+---
+
+### Emergency Return Sequence (Phase 1 — Teleport Based)
+
+Triggered when Power reaches 5% (`EMERGENCY_RETURN` link message):
+
+1. Power forced to exactly 1%
+2. Patrol state saved to linkset data
+3. Motion stopped: `llSetKeyframedMotion([], [])`
+4. Approach position calculated: 1 meter in front of Drone_Home prim using Z-axis trig:
+   ```lsl
+   float z_radians = euler.z;
+   vector approach_offset = <llCos(z_radians), llSin(z_radians), 0.0>;
+   vector approach_pos = emergency_home_position + approach_offset;
+   ```
+5. Drone TPs to approach position, facing same direction as dock (matching Z rotation)
+6. Dock notified: `DRONE_APPROACHING` (via `llRegionSayTo`)
+7. Over **10 seconds**, drone backs into dock using keyframed motion
+8. Emergency landing sequence timer fires → final position at dock + HOVER_HEIGHT
+9. Drone lowers to ground → `"Landed"` message
+10. `LANDING_COMPLETE` link message sent → Power Script initiates charging
+
+---
+
+### Departure Sequence (after charging)
+
+1. Rise to hover height (standard 3-second rise)
+2. Move 1m forward (away from dock, using dock's orientation)
+3. Send `DRONE_DEPARTING` to dock (via channel)
+4. TP to saved patrol position (emergency return) OR wait for touch (manual return)
+5. Resume patrol from saved waypoint
+
+---
+
+### Copied Drone Fix
+
+When a drone is paired for the first time:
+- Config Script sends `CLEAR_SAVED_STATE` link message
+- Movement Script clears stored waypoint index and terrain data
+- Prevents copied drones from resuming at the original drone's last patrol position
+
+---
+
+*Section 5 of 10 complete*
