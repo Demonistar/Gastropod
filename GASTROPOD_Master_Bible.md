@@ -416,3 +416,210 @@ The multi-script architecture was mandated by LSL's 64KB per-script memory limit
 ---
 
 *Section 3 of 10 complete*
+
+---
+
+## 4. Power System
+
+### Design Philosophy
+
+The power system uses a **hybrid model** to simulate realistic power consumption:
+- **Base time drain** — power depletes over time regardless of activity (idle drain)
+- **Distance drain** — additional cost per meter traveled
+- **Activity costs** — scanning avatars, height adjustments, TP operations each have fixed costs
+
+This was chosen over a simple timer-only drain because a flat rate would incorrectly charge the same power for a 10m hop and a 50m run.
+
+---
+
+### Capacity Design Goals
+
+| Operating State | Target Battery Life |
+|----------------|-------------------|
+| Idle (on, stationary) | 24 hours |
+| Patrol (normal roaming) | 12 hours |
+| Active Scanning | 6 hours |
+| Heavy Activity | 4 hours |
+| Extreme Activity | 2 hours |
+
+---
+
+### Power Drain Constants
+
+```lsl
+float BASE_POWER_DRAIN = 0.14;          // % per minute at rest (patrol rate)
+                                         // 0.07% per minute = idle (24hr rate)
+float MOVEMENT_POWER_PER_METER = 0.05;  // additional % per meter traveled
+float HEIGHT_ADJUSTMENT_COST = 8.0;     // % cost per height adjustment event
+float EMERGENCY_THRESHOLD = 25.0;       // % — triggers coordinate pre-fetch
+float CRITICAL_THRESHOLD = 5.0;         // % — triggers emergency return TP
+```
+
+**Rate breakdown:**
+- Idle drain: 4.17% per hour = **0.07% per minute**
+- Patrol drain: 8.33% per hour = **0.14% per minute**
+- Distance: **0.05% per meter** traveled
+- Height adjustment: **8 units** per event (testing rate)
+
+---
+
+### Avatar Scan Power Costs
+
+| Avatar Type | Power Cost | Notes |
+|-------------|-----------|-------|
+| Owner | 1% | Identification only |
+| Admin | 1% | Identification only |
+| Group member | 1% | Identification only |
+| Guest (permanent or temp) | 1% | Identification only |
+| Banned user | 0.5% | Quick detection, security response triggered |
+| Unknown avatar | 1% + (0.3% × script count) | Full scan; script count = number of scripts detected on avatar |
+| TP operations | 15% | Per sequence (future feature) |
+
+---
+
+### Power Thresholds and Actions
+
+| Power Level | Action |
+|------------|--------|
+| > 50% | Hover text green; normal patrol operation |
+| 25–50% | Hover text yellow; normal patrol operation |
+| ≤ 25% | **Emergency mode activates:** speed reduced to 50%, power consumption increased to 200%, coordinate request sent region-wide to dock, drone continues patrol. Hover text red. |
+| 5% | **Emergency return triggered:** drone TPs to updated dock coordinates, lands, begins charging |
+| 1% | Power forced to exactly 1% before emergency TP (intentional RP design: "just enough to return home") |
+
+---
+
+### Emergency Mode Visual (≤ 25%)
+
+Hover text flashes alternating colors every 1 second:
+
+| State | Color | Vector Value |
+|-------|-------|-------------|
+| Flash A | Red | `<1.0, 0.255, 0.212>` |
+| Flash B | Orange | `<1.0, 0.522, 0.106>` |
+
+---
+
+### Hover Text Color Reference
+
+| Power Level | Color | Vector Value |
+|------------|-------|-------------|
+| > 50% | Green | `<0.18, 0.8, 0.251>` |
+| 25–50% | Yellow | `<1.0, 0.863, 0.0>` |
+| < 25% | Red | `<1.0, 0.255, 0.212>` |
+| Emergency | Flashing red/orange | Alternates every 1 second |
+
+Hover text format: `[Object Name]\nPower: [bar] [X]%`
+Uses `llGetObjectName()` (not hardcoded) so each named drone shows its own name.
+
+---
+
+### Power Bar Display Format
+
+```lsl
+// 20-character bar: █ = filled, ░ = empty
+// bar_filled = (integer)(current_power / 5.0)
+// Example at 60%: [████████████░░░░░░░░] 60%
+```
+
+---
+
+### Charging System
+
+#### Charging Trigger
+
+Charging starts when:
+1. Movement Script sends `LANDING_COMPLETE` link message after drone lands
+2. Power Script detects `current_power <= 10.0` at landing → initiates charging
+
+#### Charge Rate (Proportional)
+
+```
+charge_time_needed = (100 - current_power) / 100 * FULL_CHARGE_TIME
+charge_rate = (100 - current_power) / charge_time_needed
+            = 1 / FULL_CHARGE_TIME  (always the same rate per second)
+```
+
+| Mode | FULL_CHARGE_TIME | Rate | Seconds per 1% |
+|------|-----------------|------|----------------|
+| Production | 3600 s (1 hour) | 0.0278%/sec | ~36 sec |
+| Test | 900 s (15 min) | 0.111%/sec × 2.5× multiplier | ~9 sec |
+
+> **IMPORTANT:** The 2.5× multiplier in test mode **must be removed** before switching to production 1-hour mode. It compensates for LSL timer unreliability at 0.1-second intervals (which were replaced by 1.0-second intervals).
+
+#### Time to Full Charge by Starting Level
+
+| Starting Power | Time to Full (Production) |
+|---------------|--------------------------|
+| 0% → 100% | 60 minutes |
+| 25% → 100% | 45 minutes |
+| 50% → 100% | 30 minutes |
+| 75% → 100% | 15 minutes |
+| X% → 100% | `(100 - X) / 100 × 60 minutes` |
+
+#### Visual During Charging
+
+- Hover text shows "CHARGING"
+- Eye and hover platform glow **blue**
+- Battery visual prop shows filling segments (if deployed)
+
+---
+
+### Charging Cycle States (Full Sequence)
+
+1. Drone lands → Movement Script sends `LANDING_COMPLETE`
+2. Power Script detects low power at landing → calls `start_charging()`
+3. Visual: blue glow, "CHARGING" text
+4. Power increments by `charge_rate` each timer tick (1.0 second interval)
+5. At 100%: Power Script sends `CHARGING_COMPLETE` link message
+6. Config Script receives → sends `START_PATROL` link message
+7. Movement Script rises, resumes from saved waypoint
+
+---
+
+### Charge Status Broadcasting
+
+While charging, Power Script broadcasts status once per minute:
+- Via link message to Config Script
+- Config Script re-broadcasts on `comm_channel` to paired listening devices
+- Format includes: current power% + estimated minutes remaining
+- Estimated minutes formula: `minutes = (100 - current_power) / 100 * 60`
+
+---
+
+### State Persistence
+
+Power level is stored between script resets:
+```lsl
+llLinksetDataWrite("current_power", (string)current_power);
+// Restored in state_entry():
+string saved = llLinksetDataRead("current_power");
+if (saved != "") { current_power = (float)saved; }
+```
+
+---
+
+### Battery Visual Prop (Standalone)
+
+A separate "Drone Battery" object with 10 child prims (named `1` through `10`):
+- Each segment = 10% of total battery
+- Only **face 1** of each prim is modified; faces 0 and 2 are left to manual setup
+- **Bidirectional wave effect:**
+  - Charging: fills bottom-up (1→10) with cascade anticipation upward
+  - Draining: fades top-down (10→1) with cascade anticipation downward
+- `VISIBILITY_THRESHOLD = 0.05` (5%) — segments only show glow above this threshold
+
+**Status indicator prims** (named `charge`):
+
+| State | Color | Glow |
+|-------|-------|------|
+| Draining | Orange `<1.0, 0.5, 0.0>` | 0.25 |
+| Drained (0%) | Red `<1.0, 0.0, 0.0>` | 0.15 |
+| Charging | Blue `<0.0, 0.5, 1.0>` | 0.15 |
+| Charged (100%) | Green `<0.0, 1.0, 0.0>` | 0.25 |
+
+> **PBR Note:** PBR must be **disabled** on the glass container prim to allow discrete segment visibility. PBR light blending causes all segments to appear lit simultaneously.
+
+---
+
+*Section 4 of 10 complete*
