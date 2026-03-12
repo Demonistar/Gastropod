@@ -301,3 +301,118 @@ Sections within scripts are marked with `//[SECTION NAME]` comments.
 ---
 
 *Section 2 of 10 complete*
+
+---
+
+## 3. Script Architecture
+
+### Drone Root Prim — Core Scripts
+
+All scripts below reside in the **root prim** of the drone linkset:
+
+| Script | Latest Version | Responsibility |
+|--------|---------------|----------------|
+| **Configuration Script** | v3.1.0 | Central coordination hub: dock pairing data management, notecard loading coordination, unique channel management, admin command dispatch, RP mode control, patrol start/stop, charge broadcasting |
+| **Movement Script** | v4.2.0 | Notecard reading, waypoint patrol, smooth KFM movement, height adjustment, rise/lower sequences, state persistence and resume, emergency return execution, notecard change detection |
+| **Power Script** | v2.3.0 | Hybrid power drain tracking (time + distance), charging cycle management, hover text display with unicode power bar, emergency threshold detection, charge broadcasting, battery swap communication prep |
+| **Pairing Script** | v1.2.0 | Initial dock-to-drone pairing only; calculates unique `comm_channel`; stores pairing data; **temporary** — designed to delete itself after pairing (self-delete disabled in test builds) |
+
+> **Note on 9th script:** The original design called for 9 scripts. The Pairing Script was intended as temporary, the Security, Scan, Diagnostics, and Communications scripts are planned but not yet built. The current functional system uses 4 drone scripts.
+
+---
+
+### Drone Child Prim Scripts
+
+These scripts reside in named **child prims** of the drone linkset (not the root prim):
+
+| Child Prim Name | Script | Responsibility |
+|----------------|--------|----------------|
+| `Eye` | Eye script | Glow effects and particle beam targeting |
+| `Hover` | Hover script | Underglow and teleport burst effects |
+
+---
+
+### Dock Object Scripts
+
+The dock is a **separate object** from the drone. It communicates over the calculated `comm_channel`.
+
+| Script | Latest Version | Responsibility |
+|--------|---------------|----------------|
+| **Dock Config Script** | v1.5.0 | Receives coordinate requests from drone; broadcasts current Drone_Home prim position and rotation; message filtering (ignores non-dock messages); RP_MODE awareness; paired-touch channel display |
+| **Dock Pairing Script** | v1.4.0 | Owner initiates pairing via touch; discovers nearby drone; calculates unique `comm_channel`; saves pairing data to linkset; admin reset/status commands via calculated channel |
+
+---
+
+### HUD Object Scripts
+
+The HUD is a **worn attachment** for the drone owner/builder:
+
+| Script | Version | Location | Responsibility |
+|--------|---------|----------|----------------|
+| **Pathway (root)** | v1.0+ | Root prim of HUD | Full waypoint recording: route name, RP mode, rotation axis, start/waypoint/end recording, output generation, resume beacon, minimize/maximize toggle, light system |
+
+---
+
+### Peripheral / Proof-of-Concept Scripts
+
+| Script | Version | Object | Responsibility |
+|--------|---------|--------|----------------|
+| **Battery Visual Charging** | v2.2 | "Drone Battery" | 10-segment visual battery prop: bidirectional charging wave effect (bottom-up fill / top-down drain), status indicator prims named "charge" |
+
+---
+
+### Script Communication Architecture
+
+**Internal (drone scripts → each other):**
+- `llMessageLinked(LINK_THIS, num, str, id)` — all inter-script communication within the drone linkset
+- No script directly calls another; all coordination is event-driven via link messages
+
+**External (drone ↔ dock):**
+- `llRegionSay(comm_channel, message)` — drone → dock
+- `llRegionSay(comm_channel, message)` — dock → drone (region-wide, not distance-limited)
+- `comm_channel` is unique per drone-dock pair, calculated during pairing
+
+**RP emotes:**
+- `llSay(0, "/me ...")` — used for RP_MODE output to local public chat
+
+---
+
+### Prim Structure — Dock
+
+The dock linkset contains a named child prim:
+
+| Prim Name | Purpose |
+|-----------|---------|
+| `Drone_Home` | Defines the exact docking target position and orientation. Always uses `0, 0, Z` rotation (Z-axis only). The drone aligns to this prim's position + 0.10075m offset. |
+
+---
+
+### Memory Management
+
+The multi-script architecture was mandated by LSL's 64KB per-script memory limit:
+- A single-script approach caused Stack-Heap Collision errors
+- Splitting into modular scripts keeps each well under the limit
+- Trade-off: some inter-script communication latency accepted as necessary
+
+**llLinksetData storage:**
+- 64KB total per linkset (shared across ALL prims — adding prims does NOT increase storage)
+- Estimated capacity: ~1000+ UUIDs within the 64KB limit
+- Used for: pairing data, persistent state, power level, debug flags
+
+---
+
+### Version History Summary
+
+| Script | Bible 1 State | Bible 2 State | Bible 3 State |
+|--------|--------------|--------------|--------------|
+| Configuration | Monolithic (pre-split) → modular design | v2.1.0 → v3.0.0 | v3.0.0 → v3.1.0 |
+| Movement | Single script (v2.0.1 working) | v3.1.0 → v4.1.0 | v4.1.0 → v4.2.0 |
+| Power | Designed, partial | v1.4.0 → v2.0.0 | v2.0.0 → v2.3.0 |
+| Pairing | Designed | v1.2.0 (working) | v1.2.0 → v1.4.0 (dock side) |
+| Dock Config | Designed | Initial impl | v1.2.0 → v1.5.0 |
+| Battery Visual | Designed | v1.0 → v2.2 | Referenced, not changed |
+| Waypoint HUD | Designed | v1.0 → v1.1.1 | Full Pathway HUD rewrite |
+
+---
+
+*Section 3 of 10 complete*
