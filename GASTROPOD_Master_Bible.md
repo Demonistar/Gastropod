@@ -120,4 +120,184 @@ Key design notes:
 
 ---
 
-*Section 1 of 10 — more sections to follow*
+*Section 1 of 10 complete*
+
+---
+
+## 2. LSL Forbidden Rules
+
+These rules were established early and enforced throughout all development sessions. **Every GASTROPOD script must obey them without exception.**
+
+---
+
+### Core Forbidden Rules
+
+**Rule 1 — No ternary operators**
+LSL does not support the C-style ternary operator.
+```lsl
+// FORBIDDEN:
+string name = (id == llGetOwner()) ? "Owner" : "Guest";
+
+// REQUIRED:
+string name;
+if (id == llGetOwner())
+{
+    name = "Owner";
+}
+else
+{
+    name = "Guest";
+}
+```
+
+---
+
+**Rule 2 — No foreach loops**
+LSL has no `foreach`. Always use traditional indexed `for` loops.
+```lsl
+// FORBIDDEN:
+foreach (key id in myList) { ... }
+
+// REQUIRED:
+integer i;
+for (i = 0; i < llGetListLength(myList); ++i)
+{
+    key id = llList2Key(myList, i);
+    // ...
+}
+```
+
+---
+
+**Rule 3 — No global assignments from function calls**
+Global variable declarations may only use literals or empty values. Assignment from functions must happen inside `state_entry` or other event handlers.
+```lsl
+// FORBIDDEN (at global scope):
+string ownerName = llKey2Name(llGetOwner());
+vector myPos = llGetPos();
+
+// REQUIRED:
+string ownerName;   // empty global declaration
+
+default
+{
+    state_entry()
+    {
+        ownerName = llKey2Name(llGetOwner());  // assign inside event
+    }
+}
+```
+
+---
+
+**Rule 4 — No `void` keyword**
+LSL does not use C-style `void`. Functions that return nothing are declared with no return type.
+```lsl
+// FORBIDDEN:
+void doSomething() { ... }
+
+// REQUIRED:
+doSomething() { ... }
+```
+
+---
+
+**Rule 5 — No `PRIM_HOVER_HEIGHT` in `llSetPrimitiveParams`**
+Must use the dedicated functions instead.
+```lsl
+// FORBIDDEN:
+llSetPrimitiveParams([PRIM_HOVER_HEIGHT, 1.0]);
+
+// REQUIRED:
+llSetHoverHeight(1.0, FALSE, 0.0);
+// or read with:
+float h = llGetHoverHeight();
+```
+
+---
+
+**Rule 6 — No runtime values in global scope**
+Globals are only for config constants and empty placeholders. No function return values at global scope.
+
+---
+
+**Rule 7 — No invisible storage via object name, description, or notecards**
+Persistent cross-script data must use `llLinksetData*`. Object name/description must not be repurposed as a data channel unless explicitly required by design.
+
+---
+
+**Rule 8 — No sneaky shorthand**
+Always expand logic clearly. No collapsing of logic into unsupported operators, non-standard syntax, or shorthand assignments.
+
+---
+
+**Rule 9 — No reserved keywords as variable names**
+The following are reserved LSL data types and cannot be used as variable names:
+`state`, `rotation`, `vector`, `integer`, `float`, `string`, `key`, `list`
+
+```lsl
+// FORBIDDEN:
+rotation rotation = llGetRot();    // "rotation" is a type name
+integer state = 1;                 // "state" is a keyword
+
+// REQUIRED:
+rotation rot_angle = llGetRot();
+integer stateValue = 1;
+```
+
+---
+
+### Additional LSL Scope Rules (Discovered During Development)
+
+These were confirmed through trial and error:
+
+- Global variables can **only** be accessed directly within event handlers (`state_entry`, `timer`, `touch_start`, etc.)
+- User-defined functions **cannot** access global variables — they can only use parameters passed to them and return values
+- Variables declared inside blocks (`if`/`else`) are not accessible outside those blocks
+- Functions must be declared **before** the `default` state block, after global variable declarations
+- All functions must have explicit return types (or use the no-type pattern for void-equivalent)
+
+---
+
+### Functions and Constants That Do NOT Exist in LSL
+
+Confirmed absent — do not use:
+
+| Does Not Exist | Notes |
+|---------------|-------|
+| `llSlerp()` | No such function; use `llEuler2Rot()` for rotation |
+| `at_target()` event | No such event; use timer-based distance check |
+| `not_at_target()` event | No such event |
+| `llGetTimerEvent()` | No such function |
+| `llKeyframedMotion()` | Wrong name; correct is `llSetKeyframedMotion()` |
+
+---
+
+### Functions and Constants That DO Exist (Confirmed)
+
+| Function/Constant | Notes |
+|------------------|-------|
+| `llSetKeyframedMotion(list keyframes, list options)` | Correct name for keyframed movement |
+| `KFM_DATA`, `KFM_TRANSLATION`, `KFM_MODE`, `KFM_FORWARD` | All valid constants |
+| `llGetTimeOfDay()` | Returns `float` — must cast to string before concatenation |
+
+---
+
+### Script Header Format (Standard)
+
+All scripts must use this versioned header:
+```lsl
+// Script Name vX.Y.Z
+// [One-line purpose description]
+// Enhancements: [list new features added]
+// Modifications: [list code changed/moved/adjusted]
+// Cleaned: [list features removed]
+// Fixed: [list broken features corrected]
+// PHASE X: [current development phase]
+```
+
+Sections within scripts are marked with `//[SECTION NAME]` comments.
+
+---
+
+*Section 2 of 10 complete*
