@@ -1121,3 +1121,166 @@ This replaces the abrupt TP-home with a graceful approach when the drone happens
 ---
 
 *Section 6 of 10 complete*
+
+---
+
+## 7. Security System
+
+> **Status:** Designed and partially specified. Not yet fully implemented as a separate script. Power costs are wired in the Power Script. Access list structure is defined. Full Scan and Security scripts are planned for future development.
+
+---
+
+### Access Control Hierarchy
+
+Avatars are evaluated in priority order. Higher priority = processed first.
+
+| Priority | Class | Storage | Notes |
+|----------|-------|---------|-------|
+| 1 | **Owner** | `llGetOwner()` (live check) | Never stored; always checked at runtime |
+| 2 | **Admin** | `llLinksetData("admin_list")` | Pipe-delimited UUIDs |
+| 3 | **Group** | `llLinksetData("security_group")` | Single group UUID; matched via `llSameGroup()` |
+| 4 | **Guest** | `llLinksetData("guest_list")` | Permanent approval |
+| 5 | **Temp Guest** | `llLinksetData("temp_guest_list")` | Cleared when avatar leaves region |
+| 6 | **Banned** | `llLinksetData("banned_list")` | Permanent ban; triggers security response |
+| 7 | **Unknown** | (not stored until decision) | Full scan; triggers admin notification |
+
+---
+
+### Security Lists (llLinksetData Keys)
+
+| List | Key | Format |
+|------|-----|--------|
+| Admin list | `"admin_list"` | Pipe-delimited UUIDs: `"uuid1|uuid2|uuid3"` |
+| Guest list | `"guest_list"` | Pipe-delimited UUIDs |
+| Temp Guest list | `"temp_guest_list"` | Pipe-delimited UUIDs; purged on region leave |
+| Banned list | `"banned_list"` | Pipe-delimited UUIDs |
+| Security group | `"security_group"` | Single group UUID |
+
+---
+
+### Scanning Logic (Priority Order)
+
+```lsl
+key avatar_id = llDetectedKey(i);
+
+if (avatar_id == llGetOwner())
+{
+    consume_power(1.0, "owner identification");
+}
+else if (llListFindList(admin_list, [avatar_id]) != -1)
+{
+    consume_power(1.0, "admin identification");
+}
+else if (security_group != NULL_KEY && llSameGroup(avatar_id))
+{
+    consume_power(1.0, "group member identification");
+}
+else if (llListFindList(guest_list, [avatar_id]) != -1 ||
+         llListFindList(temp_guest_list, [avatar_id]) != -1)
+{
+    consume_power(1.0, "guest identification");
+}
+else if (llListFindList(banned_list, [avatar_id]) != -1)
+{
+    consume_power(0.5, "banned user detection");
+    // Trigger security response
+}
+else
+{
+    // Full scan for unknown avatar
+    integer script_count = detected_scripts;
+    float scan_cost = 1.0 + (script_count * 0.3);
+    consume_power(scan_cost, "full scan (" + (string)script_count + " scripts)");
+    // Trigger admin notification
+}
+```
+
+---
+
+### Power Costs for Security Actions
+
+| Action | Power Cost |
+|--------|-----------|
+| Owner/Admin/Group/Guest identification | 1.0% |
+| Banned user detection | 0.5% |
+| Unknown avatar full scan | 1.0% + (0.3% × script count) |
+| Avatar scan (flat rate, Power Script v2.3.0) | 0.5% |
+| Security TP to avatar | 2.0% |
+| Laser target (stage 1) | 1.0% |
+| Laser blast (stage 2) | 5.0% |
+
+---
+
+### Admin Notification Format
+
+When an unknown avatar is detected:
+```
+Security Alert: Unknown Avatar
+Name: [DisplayName]
+Profile: secondlife:///app/agent/[UUID]/about
+Location: [Region] ([X], [Y], [Z])
+
+[PERMANENT] [TEMPORARY] [BAN]
+```
+
+Admin response buttons:
+- **PERMANENT** — adds avatar to permanent guest list
+- **TEMPORARY** — adds to temp guest list (cleared when avatar leaves region)
+- **BAN** — adds to banned list
+
+---
+
+### Warning / Ejection System
+
+- Minimum warning time: **10 seconds**
+- Available presets: 10s, 20s, 30s, or custom (user-specified, min 10s)
+- After warning timer: ejection or ban action executes
+
+---
+
+### Detection Persistence Rules
+
+| List | Persistence |
+|------|------------|
+| Admin / Guest / Banned | Permanent (survives resets; stored via llLinksetData) |
+| Temp Guest | Cleared when avatar detected leaving the region |
+| Scanned list (already-checked cache) | Purged hourly OR when avatar leaves region |
+
+---
+
+### Security System Power Communication (Power Script v2.3.0)
+
+The Power Script listens for link messages from security scripts:
+
+| Link Message | Power Cost Deducted |
+|-------------|-------------------|
+| `SECURITY_TELEPORT:[target_id]` | 2.0% (`TP_TELEPORT_COST`) |
+| `SECURITY_SCAN:[target_id]` | 0.5% (`AVATAR_SCAN_COST`) |
+| `SECURITY_TARGET:[target_id]` | 1.0% (`LASER_TARGET_COST`) |
+| `SECURITY_BLAST:[target_id]` | 5.0% (`LASER_BLAST_COST`) |
+
+---
+
+### Future: ID Card System (Planned)
+
+- An optional attachment for pre-authorized visitors
+- Broadcasts on the security channel when entering the monitored zone: auto-approves without scan
+- Reduces power cost to 1% base for pre-authorized avatars
+- Eliminates need for admin notification for known trusted visitors
+
+---
+
+### RP Mode Behavior (Security Output)
+
+When `RP_MODE: YES`:
+- Security events output as `/me` emotes on local channel 0
+- Examples: `/me detects unknown presence`, `/me initiating security scan`
+- No raw debug output in local chat
+
+When `RP_MODE: NO`:
+- Debug-style `llOwnerSay()` output only (visible to owner only)
+- No public chat
+
+---
+
+*Section 7 of 10 complete*
