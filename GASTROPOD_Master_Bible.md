@@ -2417,3 +2417,162 @@ All bugs from all three chat sessions, deduplicated and organized by script/syst
 ---
 
 *Section 9 of 10 complete*
+
+---
+
+## 10. Roadmap
+
+### Phase 1 — Core Autonomous Cycle (COMPLETE ✅)
+
+The following features are confirmed working as of the end of the recorded chat sessions:
+
+| Feature | Status |
+|---------|--------|
+| Notecard waypoint patrol (KFM smooth movement) | ✅ Done |
+| Rise and lower sequences (3s each) | ✅ Done |
+| Z-axis only rotation | ✅ Done |
+| State persistence (waypoint, terrain, power, emergency) | ✅ Done |
+| Hybrid power drain (time + distance + activity) | ✅ Done |
+| Emergency mode at 25% (50% speed, 200% drain) | ✅ Done |
+| Emergency coordinate update at 25% (pre-fetch dock position) | ✅ Done |
+| Emergency TP return at 5% power | ✅ Done |
+| Dock approach + 10-second backup sequence | ✅ Done |
+| Charging cycle (1-hour production / 15-min test) | ✅ Done |
+| Auto-resume patrol after charging (from saved waypoint) | ✅ Done |
+| Unicode power bar with color-coded hover text | ✅ Done |
+| Flashing red/orange emergency hover text | ✅ Done |
+| Dock pairing (unique channel, one-to-one) | ✅ Done |
+| Dock coordinate request protocol | ✅ Done |
+| Multi-drone operation (each independently paired) | ✅ Done |
+| RP_MODE: YES/NO from notecard | ✅ Done |
+| Notecard change detection (auto-reload on replace) | ✅ Done |
+| Copied drone protection (CLEAR_SAVED_STATE) | ✅ Done |
+| Waypoint HUD — record and output routes | ✅ Done |
+| Battery visual prop (10-segment wave display) | ✅ Done |
+
+---
+
+### Phase 2 — Proximity Docking (PLANNED, Next Up)
+
+**Trigger conditions:** Power < 25% AND drone is within 20m of dock
+
+**Behavior:**
+- If both conditions met → initiate **controlled docking** (no emergency TP, smooth movement approach)
+- If power < 25% but drone is far from dock → continue normal patrol until 5% (Phase 1 emergency TP)
+- If drone is close but power ≥ 25% → continue normal patrol
+
+**Implementation requires:**
+- Distance check from drone position to stored dock coordinates, run at each waypoint advance
+- New `PROXIMITY_DOCK` link message from Movement to Config when conditions are met
+- Controlled slow-approach movement (not TP) within 20m range
+- After docking: charge + auto-resume (same as Phase 1)
+
+---
+
+### Phase 3 — Security System (PLANNED)
+
+Full security scanning and response system:
+
+| Feature | Notes |
+|---------|-------|
+| Avatar detection (sensor-based) | Detect avatars within patrol area |
+| Access list scanning | Owner / Admin / Group / Guest / TempGuest / Banned priority check |
+| Admin notification panel | Dialog with PERMANENT / TEMPORARY / BAN buttons |
+| Warning system | 10s minimum countdown before ejection/action |
+| Temp guest tracking | Auto-purge when avatar leaves region |
+| Scanned cache | Purge hourly or on region departure |
+| Ejection / security actions | Configurable response per access level |
+| Particle beam effects | Eye prim laser targeting animation |
+| Security TP | TP to avatar location for investigation (2% power cost) |
+| Laser target / blast | Two-stage security response (1% + 5% power) |
+
+---
+
+### Phase 4 — Battery Hot-Swap (DESIGNED, Not Yet Coded)
+
+Full protocol for swapping a depleted battery pack with a charged one:
+
+**Trigger:** Drone docks at 1% power AND external battery is at 100%
+
+**30-second sequence:**
+1. t=0s: Drone broadcasts power status to dock/battery
+2. t=10s: `/me disconnecting depleted battery pack`
+3. t=20s: `/me installing fully charged battery pack [ID]`
+4. t=30s: `/me battery hot-swap complete — systems fully powered`
+5. Result: Instant 100% power restoration
+6. Sends: `HOT_SWAP_COMPLETE:[drone_id]:[battery_id]`
+
+**If battery < 100%:** Battery stops its own charging; drone charges normally (or at solar speed if solar connected)
+
+**Visual during hot-swap:** Cyan eye light
+
+**Battery communication formats:**
+```
+BATTERY_STATUS:[battery_id]:[charge_level]
+BATTERY_SWAP_REQUEST:[drone_id]
+HOT_SWAP_COMPLETE:[drone_id]:[battery_id]
+```
+
+---
+
+### Phase 5 — Solar Panel Integration (DESIGNED, Not Yet Coded)
+
+- Solar panel is a paired object that broadcasts `SOLAR_AVAILABLE:YES` or `SOLAR_AVAILABLE:NO`
+- When solar is available: charging rate doubles (30 minutes instead of 1 hour)
+- Solar charging interval: 18 seconds per 1% (vs 36 for normal charge)
+- Visual: Yellow eye light during solar charging (vs Blue for normal)
+
+---
+
+### Future / Advanced Features
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| **Control Panel** | High | Multi-drone status display; return/stop/start per drone; countdown timers; last charge timestamp; estimated return time |
+| **Fleet Management Hub** | Medium | Central pillar with 5 dock ports; auto-alignment; battery management for multiple drones |
+| **ID Card System** | Medium | Optional worn attachment for pre-authorized visitors; broadcasts on security channel for auto-approval; reduces scan cost to 1% |
+| **HUD Integration with Control Panel** | Medium | Real-time patrol status, battery levels, drone IDs on a management panel |
+| **Clock Script Integration** | Low | Unix timestamps, time zones, DST, military time for control panel |
+| **Countdown Timer Display** | Low | Listens on `comm_channel` for charge broadcasts; updates visible display per minute |
+
+---
+
+### Control Panel Broadcasting Spec (For Future Implementation)
+
+Power Script broadcasts on `comm_channel`:
+
+| Event | Format |
+|-------|--------|
+| Regular update (every 5 min) | `POWER_UPDATE:[drone_id]:[power%]:[runtime_estimate]` |
+| Charging start | `CHARGING_START:[drone_id]:[NORMAL/SOLAR/HOT_SWAP]:[minutes]:[timestamp]` |
+| Per 10% power drop | `POWER_MILESTONE:[drone_id]:[milestone%]:[runtime_remaining]:[estimated_return_time]` |
+| Charge complete | `CHARGING_COMPLETE:[drone_id]:[completion_timestamp]` |
+| Hot-swap complete | `HOT_SWAP_COMPLETE:[drone_id]:[battery_id]` |
+
+---
+
+### Production Readiness Checklist
+
+Before deploying GASTROPOD to a live parcel, confirm:
+
+- [ ] Power Script: `FULL_CHARGE_TIME = 3600.0` (not 900.0)
+- [ ] Power Script: Remove 2.5× multiplier from `charge_rate` calculation
+- [ ] Movement Script: Waypoint timer set to `0.25` seconds (not `1.0`)
+- [ ] Movement Script: `BASE_POWER_DRAIN = 0.069` (24-hour target)
+- [ ] Movement Script: `MOVEMENT_POWER_PER_METER = 0.00006`
+- [ ] Dock Pairing Script: Test reset/re-pair functionality before deployment
+- [ ] PBR disabled on Battery visual glass container prim
+- [ ] Tour notecard: Correct `RP_MODE: YES/NO` for deployment context
+- [ ] Drone named correctly (affects hover text display)
+- [ ] All drones independently paired to their own docks
+- [ ] Phase 2 (proximity docking) not yet implemented — emergency TP is the only return method
+
+---
+
+*Section 10 of 10 complete*
+
+---
+
+*GASTROPOD_Master_Bible.md — fully assembled from bible_1.md, bible_2.md, bible_3.md*
+*Source chat sessions: September 4–26, 2025*
+*10 sections | All code blocks preserved | All bugs documented*
