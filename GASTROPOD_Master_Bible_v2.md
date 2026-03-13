@@ -2423,3 +2423,132 @@ Output rules:
 
 ---
 
+## 9. Bugs & Current Status
+
+All bugs from all three chat sessions, deduplicated and organized by script/system. Updated with final status from September 25–26, 2025 sessions.
+
+**Status Legend:** RESOLVED | PARTIAL | OPEN | IN PROGRESS (at end of sessions)
+
+---
+
+### Movement Script Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| M1 | Object dragging face on ground (physics) | RESOLVED | Removed physics; use `llSetKeyframedMotion` |
+| M2 | Rotation spinning to non-zero X/Y (physics) | RESOLVED | Non-physical movement; Z-only rotation with `llEuler2Rot` |
+| M3 | Instant teleport to waypoints (`llSetRegionPos`) | RESOLVED | `llSetKeyframedMotion` for smooth horizontal movement |
+| M4 | `llSlerp()` not in LSL | RESOLVED | Removed; use `llEuler2Rot` for rotation |
+| M5 | `at_target()` event not in LSL | RESOLVED | Removed; use timer-based distance check |
+| M6 | `llKeyframedMotion()` — wrong function name | RESOLVED | Correct name: `llSetKeyframedMotion()` |
+| M7 | `KFM_*` constants not defined | RESOLVED | Correct syntax confirmed and documented |
+| M8 | `"rotation"` reserved word used as variable name | RESOLVED | Renamed to `rot_angle` / `rotAngle` |
+| M9 | Global variable access inside functions (scope errors) | RESOLVED | All logic moved to event handlers; functions accept params only |
+| M10 | Physics re-enabling during movement | RESOLVED | Removed all `llSetStatus(STATUS_PHYSICS, ...)` calls |
+| M11 | Script forcing drone to WP0 on reset | RESOLVED | State persistence: auto-resume only when `patrol_active="1"` |
+| M12 | Drone not resuming from saved waypoint | RESOLVED | `load_movement_state()` with linkset data |
+| M13 | Resume TP not working in timer context | RESOLVED | Stop timer before TP; execute in link_message context; 3-second delay before `MOVEMENT_STARTED` |
+| M14 | Emergency return loop after resume TP | RESOLVED | 3-second delay before `MOVEMENT_STARTED` allows power state to stabilize |
+| M15 | `llSetRegionPos()` returns TRUE but drone doesn't move | RESOLVED | Root cause: rising timer context; Fix: stop timer completely before TP, use link_message context |
+| M16 | `execute_teleport` function scope error | RESOLVED | Renamed `unified_teleport`; declared before `default{}` block |
+| M17 | Bridge descent 1 waypoint early | RESOLVED | `lowering_delayed` flag: lower command delayed by +1 waypoint (v4.0.4) |
+| M18 | Copied drones resume from original drone's position | RESOLVED | Config sends `CLEAR_SAVED_STATE`; Movement clears linkset data |
+| M19 | RP_MODE from notecard not broadcasting to dock | RESOLVED | Added `broadcast_rp_mode()` in Movement Script v4.2.0 |
+
+---
+
+### Power Script Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| P1 | Hover text always white | RESOLVED | Use vector color parameter in `llSetText()` properly |
+| P2 | Emergency mode not activating | RESOLVED | Added emergency mode check to `update_power_display()` |
+| P3 | Rising slower than lowering | PARTIAL | May be related to emergency mode speed; not fully diagnosed |
+| P4 | Power only updating at waypoints (not hybrid) | RESOLVED | Base power drain moved to top of `timer()`, runs continuously |
+| P5 | 0.5% per minute rate wrong for 24hr target | RESOLVED | Corrected to 0.069%/min (24-hour base runtime) |
+| P6 | Hover text shows "SECURITY DRONE" (hardcoded) | RESOLVED | Changed to `llGetObjectName()` dynamically |
+| P7 | Battery charging rate too slow / too fast | RESOLVED | Timer changed from 0.1s to 1.0s; 2.5x multiplier for 15-min test mode |
+| P8 | Battery segments showing at 0.028% power | RESOLVED | Added `VISIBILITY_THRESHOLD = 0.05` (5% minimum before segment shows) |
+| P9 | Battery cascade effect lighting all segments at once | RESOLVED | Simplified cascade: primary segment gets full alpha; next segment gets light preview only at >50% |
+| P10 | Battery visual "reset" flash between segments (PBR artifact) | RESOLVED | Disabled PBR on glass container prim |
+| P11 | Battery showing "Cycle stopped at 0%" after 3 minutes | RESOLVED | Stop message now reports actual float value, not `(integer)current_power` |
+| P12 | Return type error — `handle_security_power_drain` | RESOLVED | Added `float` return type to function declaration |
+| P13 | Hovertext and lights turn off permanently | RESOLVED | Centralized visual control in `update_power_display()`; lights ON when moving/charging/swapping |
+| P14 | Variable `last_power_milestone` declared twice | IN PROGRESS | v2.3.0 rebuild in progress; session ended before confirmation |
+
+---
+
+### Configuration Script Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| C1 | Emergency return triggered at 25% instead of 5% | RESOLVED | `emergency_update=TRUE` parameter sends `UPDATE_HOME_COORDINATES` (no movement) |
+| C2 | First touch after pairing stops non-existent patrol | RESOLVED | Added `patrol_active = FALSE` explicitly after pairing completion (v3.0.1) |
+| C3 | Type mismatch — `(integer)id` in Config Script | RESOLVED | Two-step conversion: `string s = (string)id; integer n = (integer)s;` |
+
+---
+
+### Dock Script Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| D1 | Dock landing at wrong coordinates when dock is rotated | RESOLVED | Approach vector uses `euler.z` trigonometry; `convert_dock_rotation()` fixed |
+| D2 | Dock Pairing Script ignores reset commands | RESOLVED | v1.4.0: admin listener always set up on paired channel |
+| D3 | Linkset data survives script resets — blocks re-pairing | RESOLVED | v1.4.0: `/<channel> reset` explicitly calls `llLinksetDataDelete()` |
+| D4 | Dock spamming "Unknown message: CHARGE_STATUS" | RESOLVED | v1.3.0: `is_dock_message()` filter silently ignores non-dock messages |
+
+---
+
+### HUD Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| H1 | HUD light prims stay ON when minimized after re-attach | RESOLVED | `forceVisibilityUpdate()` called in `state_entry()`; default state = minimized |
+| H2 | HUD orange glow flicker when minimizing | RESOLVED | Two-pass: turn off all glows first, then all alphas with `llSleep(0.01)` between |
+| H3 | HUD RP mode and rotation axis always defaulting | RESOLVED | Conditional default: only apply defaults if stored value is empty string |
+| H4 | HUD waypoint output shows zeros | RESOLVED | Store actual vectors; use `(float)llList2String()` for parsing |
+| H5 | HUD output truncated at ~34 waypoints | RESOLVED | Switched to `llOwnerSay()` + chunked output (30 waypoints per message) |
+| H6 | Syntax error — `string state = ""` | RESOLVED | Renamed to `stateValue` (`state` is a reserved LSL keyword) |
+| H7 | Syntax error — `float rotation = llAtan2(...)` | RESOLVED | Renamed to `angleToNext` / `rotAngle` (`rotation` is a reserved LSL type) |
+| H8 | Type mismatch — `llGetTimeOfDay()` in string concat | RESOLVED | Changed to `(string)llGetTimeOfDay()` |
+| H9 | Syntax error at line 6,7 — before PRIM_ constants | RESOLVED | All assignments moved into `state_entry()`; string constants used as literals |
+
+---
+
+### Miscellaneous / Architecture Bugs
+
+| # | Bug | Status | Resolution |
+|---|-----|--------|-----------|
+| X1 | Stack-Heap Collision (single script exceeds 64KB) | RESOLVED | Split into modular multi-script architecture |
+| X2 | Drone reverting name to "Untitled" | NOT APPLICABLE | Artifact of Claude's interface only; not an in-world bug |
+| X3 | Emergency landing sequence removed without permission | RESOLVED | Feature restored; user provided original working code |
+| X4 | Double-click required to start patrol after pairing | RESOLVED | `patrol_active = FALSE` set after pairing; message clarified |
+| X5 | RP_MODE not being respected by drone or dock output | RESOLVED | All scripts use centralized output functions; `broadcast_rp_mode()` added |
+
+---
+
+### Still Open / In Progress at End of All Sessions (Sept 26, 2025)
+
+| # | Bug | Status | Notes |
+|---|-----|--------|-------|
+| P3 | Rising slower than lowering | PARTIAL | Possibly emergency mode speed interference; not fully diagnosed |
+| P14 | `last_power_milestone` declared twice in Power Script v2.3.0 | IN PROGRESS | v2.3.0 full rebuild started but conversation hit length limit before completion |
+
+---
+
+### System Status Summary (As Of September 26, 2025)
+
+| Component | Version | Status |
+|-----------|---------|--------|
+| Configuration Script | v3.1.0 | Working |
+| Movement Script | v4.2.0 | Working |
+| Power Script | v2.3.0 | In Progress — rebuild for duplicate variable fix |
+| Dock Config Script | v1.5.0 | Working |
+| Dock Pairing Script | v1.4.0 | Working |
+| Pathway HUD | Latest | Working — 82-waypoint routes confirmed |
+| Battery Visual | v2.2 | Working |
+| Phase 1 Autonomous Cycle | — | CONFIRMED WORKING (Sept 9, 2025) |
+| Multiple Drone Operation | — | CONFIRMED WORKING (mrk I at WP5, mrk III at WP33) |
+
+---
+
