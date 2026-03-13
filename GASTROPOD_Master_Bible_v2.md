@@ -15,6 +15,126 @@
 
 ---
 
+## 2. LSL Forbidden Rules & Coding Constraints
+
+These rules were established during the project to prevent LSL compilation errors, runtime errors, and scope bugs. All scripts in the GASTROPOD system must comply.
+
+### Rule 1 — No Ternary Operators
+
+LSL does not support the `?:` ternary operator.
+
+**Wrong:**
+```lsl
+integer x = (condition) ? 1 : 0;
+```
+**Correct:**
+```lsl
+integer x;
+if (condition) { x = 1; } else { x = 0; }
+```
+
+### Rule 2 — No Foreach Loops
+
+LSL has no `foreach` construct. Use indexed `for` or `while` loops with integer counters.
+
+**Wrong:**
+```lsl
+foreach (item in list) { ... }
+```
+**Correct:**
+```lsl
+integer i = 0;
+while (i < llGetListLength(myList)) {
+    string item = llList2String(myList, i);
+    i++;
+}
+```
+
+### Rule 3 — No Global Assignments from Function Calls
+
+Global variable declarations may not be initialized by function calls. Functions may only be called inside event handlers or user-defined functions.
+
+**Wrong (top of script):**
+```lsl
+string my_key = (string)llGetKey();  // runtime call at global scope
+```
+**Correct:**
+```lsl
+string my_key;  // declare empty globally
+
+default {
+    state_entry() {
+        my_key = (string)llGetKey();  // assign inside event handler
+    }
+}
+```
+
+### Rule 4 — No `void` Keyword
+
+LSL has no `void` return type. Functions that return nothing simply have no return type specifier.
+
+**Wrong:**
+```lsl
+void my_function() { ... }
+```
+**Correct:**
+```lsl
+my_function() { ... }
+```
+
+### Rule 5 — No `PRIM_HOVER_HEIGHT` in `llSetPrimitiveParams`
+
+`PRIM_HOVER_HEIGHT` is not a valid parameter for `llSetPrimitiveParams` in LSL. Do not use it.
+
+### Rule 6 — No Runtime Values in Global Scope
+
+No expression that requires runtime evaluation may be placed in the global scope. Global variables must have compile-time constant values or be declared empty.
+
+**Wrong:**
+```lsl
+float my_val = llFrand(1.0);  // runtime value
+```
+**Correct:**
+```lsl
+float my_val;  // assigned in state_entry()
+```
+
+### Rule 7 — No Invisible Storage via Object Name/Description/Notecards
+
+Do not use `llSetObjectName()`, `llSetObjectDesc()`, or hidden notecards to pass state between scripts. Use `llLinksetDataWrite()` / `llLinksetDataRead()` for all persistent cross-script storage.
+
+### Rule 8 — No Sneaky Shorthand
+
+Write explicit, readable code. No bitwise tricks, no collapsed conditionals, no undocumented magic numbers. Every constant must be named.
+
+### Rule 9 — No Reserved Keywords as Variable Names
+
+The following LSL type names and keywords are reserved and must NOT be used as variable names:
+
+| Reserved Word | Bad Variable Name | Correct Alternative |
+|---------------|-------------------|---------------------|
+| `state` | `string state` | `string stateValue` |
+| `rotation` | `float rotation` | `float rotAngle` / `float angleValue` |
+| `vector` | `vector vector` | `vector pos` |
+| `integer` | `integer integer` | `integer count` |
+| `float` | `float float` | `float val` |
+| `string` | `string string` | `string text` |
+| `key` | `key key` | `key target_key` |
+| `list` | `list list` | `list items` |
+
+### Additional Known LSL Constraints Observed in This Project
+
+| Issue | Cause | Correct Approach |
+|-------|-------|-----------------|
+| Type mismatch when concatenating float to string | `llGetTimeOfDay()` returns `float`, not `string` | `(string)llGetTimeOfDay()` |
+| "Name previously declared within scope" | Variable declared twice in same scope | Rename one declaration or move to outer scope |
+| Stack-heap collision at 64KB | Monolithic script exceeded LSL memory limit | Split into modular scripts |
+| Return type mismatch | Function declared without return type but uses `return value;` | Declare return type explicitly: `float my_function()` |
+| LSL timer fires slower than expected at 0.1s intervals | LSL timer unreliable at very short intervals | Use 1-second intervals; adjust increment multipliers |
+| `llSetRegionPos()` returns TRUE but doesn't move object | Called in conflict with active KFM timer | Stop timer completely before TP; wait 3 seconds before next movement message |
+
+---
+
 ## Table of Contents
 
 1. [Project Overview & Purpose](#1-project-overview--purpose)
