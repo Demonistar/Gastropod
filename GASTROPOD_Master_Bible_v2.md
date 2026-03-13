@@ -2552,3 +2552,103 @@ All bugs from all three chat sessions, deduplicated and organized by script/syst
 
 ---
 
+## 10. Changelog
+
+### Document Changelog
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| v1.0 | 2025-09 | Claude | Initial extraction from first 3 chat sessions (bible_1.md) |
+| v1.1 | 2025-09 | Claude | Added content from second 3 chat sessions (bible_2.md) |
+| v1.2 | 2025-09 | Claude | Added content from last 3 chat sessions (bible_3.md) |
+| v1.3 | 2025-09 | Claude | Merged into GASTROPOD_Master_Bible.md (10 sections) |
+| v2.0 | 2026-03-13 | Claude | Full rebuild from complete re-read of all source chat files; 11 sections; gaps filled; all code blocks preserved; battery hot-swap, control panel broadcasting, RP_MODE system fully documented |
+
+---
+
+### Script Changelog
+
+#### Configuration Script
+
+| Version | Key Change |
+|---------|-----------|
+| Pre-split | Monolithic single script; caused stack-heap collision |
+| v2.1.0 | Initial modular version after split |
+| v3.0.0 | Config v3: persistent debug toggle, RP mode integration, control panel prep, charge broadcasting |
+| v3.0.1 | Fixed: `patrol_active = FALSE` after pairing (double-click bug) |
+| v3.1.0 | Added `config_output()` function for consistent RP_MODE output filtering; all admin commands on paired channel |
+
+#### Movement Script
+
+| Version | Key Change |
+|---------|-----------|
+| v2.0.1 | First working waypoint patrol; Z-only rotation; rise/lower sequences |
+| v2.0.3 | Global variables restructured; functions properly separated from event handlers |
+| v3.1.0 | State persistence added; resume from saved waypoint; emergency return |
+| v4.0.4 | `lowering_delayed` flag: prevents premature bridge descent |
+| v4.1.0 | Notecard change detection (`changed()` event + `CHANGED_INVENTORY`); auto-reload on Tour notecard replacement; `CLEAR_SAVED_STATE` message after pairing |
+| v4.2.0 | `broadcast_rp_mode()` added; broadcasts RP_MODE to dock after notecard load and after pairing; persistent debug via `load_debug_state()`/`save_debug_state()`; `movement_output()` for RP-aware messaging; control panel command prep |
+
+#### Power Script
+
+| Version | Key Change |
+|---------|-----------|
+| v1.4.0 | Initial working version; basic drain and charging |
+| v2.0.0 | `llGetObjectName()` for hover text; RP mode support; charge broadcasting |
+| v2.1.0 | Persistent debug toggle; communication channel listening; `power_output()` function; enhanced charge broadcasting; battery swap prep |
+| v2.3.0 | Rebuilt from scratch: 24-hour base runtime (0.069%/min); 22-hour with movement (0.00006%/m); 1-hour charging (36s/1%); solar panel integration (18s/1%); battery hot-swap system; control panel broadcasting; security power costs (TP 2%, scan 0.5%, laser 1%, blast 5%); centralized visual control |
+
+#### Dock Config Script
+
+| Version | Key Change |
+|---------|-----------|
+| v1.2.0 | Initial: region-wide communication, basic command handling |
+| v1.3.0 | Added `is_dock_message()` filter; silently ignores `CHARGE_STATUS` and unknown messages |
+| v1.4.0 | Owner touch shows paired `comm_channel` privately via `llRegionSayTo(llGetOwner(), ...)`; post-pairing instructions |
+| v1.5.0 | RP_MODE listening; `drone_rp_mode` variable; `rp_mode_received` flag; `dock_output()` for filtered output; persistent RP storage in linkset data |
+
+#### Dock Pairing Script
+
+| Version | Key Change |
+|---------|-----------|
+| v1.1.0 | Basic pairing; finds Drone_Home prim; sends coordinates |
+| v1.2.0 | `pairing_completed` flag prevents re-pairing; self-delete disabled for testing |
+| v1.4.0 | Full rewrite: admin listener on calculated channel; `reset` clears all linkset data; `status` reports pairing state |
+
+#### Waypoint HUD (Pathway)
+
+| Version | Key Change |
+|---------|-----------|
+| v1.0 | Basic waypoint recording and output |
+| v1.1.0 | Light prim system; minimize/maximize toggle; RP_MODE and rotation axis persistence |
+| v1.1.1 | Two-pass minimize fix (glow before alpha); `llOwnerSay()` for output |
+| Latest | Full Pathway HUD: 11 buttons, 9 light prims, chunked output (30 waypoints per message with `=====Continued=====` headers), 82-waypoint route confirmed working |
+
+#### Battery Visual Script
+
+| Version | Key Change |
+|---------|-----------|
+| v1.0 | Basic 10-segment visualization |
+| v2.0 | Bidirectional wave effect; face-1-only modification |
+| v2.2 | `VISIBILITY_THRESHOLD = 0.05`; simplified cascade; 2.5x multiplier for test mode; PBR fix identified |
+
+---
+
+### Development Timeline
+
+| Date | Event |
+|------|-------|
+| Sept 4, 2025 | Project start; initial architecture decisions; forbidden rules established |
+| Sept 4–7, 2025 | Movement Script working (v2.0.1); KFM confirmed; Z-only rotation |
+| Sept 8, 2025 | Stack-heap collision; split into modular scripts |
+| Sept 9, 2025 | Phase 1 confirmed working: full autonomous cycle patrol → emergency → charge → resume |
+| Sept 9–13, 2025 | Battery Visual Script; HUD v1.1.1; multiple drones confirmed simultaneous |
+| Sept 13, 2025 | Pathway HUD full build; 82-waypoint Master Patrol route recorded |
+| Sept 14, 2025 | Chunked HUD output confirmed working; all 82 waypoints output across 4 messages |
+| Sept 25, 2025 | RP_MODE spam bug identified; Dock Config v1.5.0, Movement v4.2.0, Power v2.1.0, Config v3.1.0 all updated for consistent RP handling |
+| Sept 25, 2025 | Power system recalculated: 24hr base runtime, 22hr with movement |
+| Sept 26, 2025 | Power Script v2.3.0 rebuild started (duplicate variable fix); conversation ended before completion |
+| 2026-03-13 | GASTROPOD_Master_Bible_v2.md produced; complete re-read of all source chat files |
+
+---
+
