@@ -414,3 +414,219 @@ The HUD is a **worn attachment** for the drone owner/builder. Object name: `Path
 
 ---
 
+## 4. Power System
+
+### 4.1 Design Philosophy
+
+The power system uses a **hybrid drain model** to simulate realistic power consumption:
+
+- **Base time drain** — power depletes over time regardless of activity
+- **Distance drain** — additional cost per meter traveled
+- **Activity costs** — fixed costs for specific operations (TP, scan, laser, blast)
+
+A flat timer-only drain was rejected because it would charge the same power for idle hovering and active combat operations. The hybrid model gives the drone meaningful operational trade-offs.
+
+### 4.2 Final Power Constants (v2.3.0 — Production Values)
+
+```lsl
+// === POWER DRAIN CONSTANTS ===
+float BASE_POWER_DRAIN = 0.069;             // % per minute — 24-hour base runtime
+float MOVEMENT_POWER_PER_METER = 0.00006;   // % per meter — 22-hour with movement
+float HEIGHT_ADJUSTMENT_COST = 1.5;         // % per terrain height change
+
+// === THRESHOLDS ===
+float EMERGENCY_THRESHOLD = 25.0;           // % — triggers coordinate pre-fetch
+float CRITICAL_THRESHOLD = 5.0;             // % — triggers emergency return TP
+
+// === CHARGING ===
+float CHARGING_INTERVAL = 36.0;             // seconds per 1% charge (1-hour to full)
+float SOLAR_CHARGING_INTERVAL = 18.0;       // seconds per 1% with solar (30 min to full)
+
+// === SECURITY COSTS ===
+float TP_TELEPORT_COST = 2.0;               // % per TP operation
+float AVATAR_SCAN_COST = 0.5;               // % per avatar scanned
+float LASER_TARGET_COST = 1.0;              // % for initial laser targeting
+float LASER_BLAST_COST = 5.0;               // % for full security blast
+```
+
+### 4.3 Runtime Economics
+
+| Operating State | Runtime | Notes |
+|----------------|---------|-------|
+| Idle (stationary, on) | 24 hours | Base drain only |
+| Normal patrol (movement) | ~22 hours | Base + movement cost |
+| Emergency mode (25%) | ~8–10 hours remaining | Double consumption |
+| Active security (TPs, scans) | ~12–16 hours | Depends on encounter frequency |
+| Heavy combat (frequent blasts) | ~8–12 hours | Each blast = 5% cost |
+
+### 4.4 Power Thresholds and Actions
+
+| Power Level | Action | Visual |
+|------------|--------|--------|
+| > 50% | Normal patrol operation | Hover text green |
+| 25–50% | Normal patrol operation | Hover text yellow |
+| ≤ 25% | **Emergency mode**: speed reduced to 50%, consumption doubled, coordinate request sent to dock, patrol continues | Hover text red / flashing |
+| 5% | **Emergency return triggered**: power forced to 1%, TP to dock coordinates | Emergency emotes |
+| 1% | Power forced to exactly 1% before emergency TP (RP design: "just enough to get home") | — |
+| Docked | Charging begins, 1% → 100% over 1 hour | Blue glow |
+
+### 4.5 Emergency Mode Detail (≤ 25%)
+
+When power drops to 25%:
+1. Drone broadcasts `REQUEST_HOME_COORDINATES:[drone_uuid]` region-wide
+2. Dock responds with `HOME_COORDINATES:<pos>|<rot>`
+3. Drone stores coordinates silently — does NOT trigger emergency return
+4. Patrol continues at reduced speed (50%) with doubled consumption
+5. Hover text flashes alternating red/orange every 1 second
+
+Hover text flash colors:
+- Flash A: Red `<1.0, 0.255, 0.212>`
+- Flash B: Orange `<1.0, 0.522, 0.106>`
+
+### 4.6 Emergency Return Sequence (5%)
+
+1. Power forced to exactly 1% (RP design)
+2. Patrol state saved (current waypoint index)
+3. KFM timer stopped completely (`llSetTimerEvent(0.0)`)
+4. `llSetRegionPos(dock_pos)` executed — teleports drone to dock
+5. 3-second delay before sending `MOVEMENT_STARTED` link message (allows state to stabilize)
+6. Drone lands at dock, begins charging
+
+### 4.7 Hover Text Display
+
+Format: `[Object Name]\nPower: [bar] [X]%`
+
+Uses `llGetObjectName()` (not hardcoded "SECURITY DRONE") so each named drone shows its own name.
+
+Power bar (20-character unicode bar):
+```lsl
+// bar_filled = (integer)(current_power / 5.0)
+// Example at 60%: Power: [████████████░░░░░░░░] 60%
+```
+
+Hover text colors:
+| Power Level | Color | Vector |
+|------------|-------|--------|
+| > 50% | Green | `<0.18, 0.8, 0.251>` |
+| 25–50% | Yellow | `<1.0, 0.863, 0.0>` |
+| < 25% | Red | `<1.0, 0.255, 0.212>` |
+
+### 4.8 Charging System
+
+**Charge trigger:** Movement Script sends `LANDING_COMPLETE` link message after drone lands at dock.
+
+**Charge rate formula:**
+```
+charge_rate = 1 / FULL_CHARGE_TIME  (constant regardless of starting level)
+FULL_CHARGE_TIME = 3600 seconds (production) / 1800 seconds (solar)
+```
+
+| Mode | Seconds per 1% | Total to Full |
+|------|---------------|---------------|
+| Normal | 36 seconds | 60 minutes |
+| Solar panel | 18 seconds | 30 minutes |
+| Battery hot-swap (100% battery) | Instant (30s RP sequence) | ~30 seconds |
+
+**Charging visual:**
+- Hover text: "CHARGING"
+- Eye and hover platform glow: **blue**
+- Solar charging: **yellow** glow
+- Hot-swap: **cyan** glow
+
+**Charging cycle states:**
+1. Drone lands → Movement Script sends `LANDING_COMPLETE`
+2. Power Script detects low power → calls `start_charging()`
+3. Power Script broadcasts `CHARGING_START:[drone_id]:[type]:[minutes]:[timestamp]` to control panel
+4. Power increments by `charge_rate` each second (timer interval = 1.0 second)
+5. At 100%: Power Script sends `CHARGING_COMPLETE` link message
+6. Config Script receives → sends `START_PATROL` link message
+7. Movement Script rises, resumes from saved waypoint
+
+### 4.9 Battery Hot-Swap System (Phase 2)
+
+When the drone docks, it broadcasts its power level (always 1%) to the dock/battery system.
+
+**If battery is at 100%:** Hot-swap sequence begins (30 seconds total):
+```
+t=0s:  Begin hot-swap
+t=10s: /me disconnecting depleted battery pack
+t=20s: /me installing fully charged battery pack [battery_id]
+t=30s: /me battery hot-swap complete - systems fully powered
+       → Power set to 100% instantly
+       → Broadcasts HOT_SWAP_COMPLETE:[drone_id]:[battery_id]
+```
+
+**If battery is less than 100%:** Battery stops charging. Drone charges normally (36s per 1%). When drone reaches 100%, it sends notification to battery to resume charging.
+
+**If no battery paired:** Normal charging only (no change).
+
+### 4.10 Solar Panel Integration
+
+If a solar panel object is paired to the dock:
+- Listens for `SOLAR_AVAILABLE:YES/NO`
+- Solar = 18 seconds per 1% (30-minute full charge)
+- Visual: yellow eye glow during solar charging
+
+### 4.11 Control Panel Broadcasting
+
+Power Script broadcasts status at multiple intervals for Control Panel integration:
+
+| Message | Trigger | Format |
+|---------|---------|--------|
+| Regular update | Every 5 minutes | `POWER_UPDATE:[drone_id]:[power%]:[runtime_estimate]` |
+| Charging start | When charging begins | `CHARGING_START:[drone_id]:[type]:[minutes]:[timestamp]` |
+| Power milestone | Every 10% drop | `POWER_MILESTONE:[drone_id]:[milestone%]:[runtime_remaining]:[estimated_return_time]` |
+| Charging complete | When 100% reached | `CHARGING_COMPLETE:[drone_id]:[completion_timestamp]` |
+
+Charging types in broadcast: `NORMAL` (60min), `SOLAR` (30min), `HOT_SWAP` (1min)
+
+Unix timestamps are used for clock script integration (time zones, DST, military time).
+
+### 4.12 Security Power Costs
+
+The drone loses power for every security action. The Power Script listens for these messages from the Eye Security system:
+
+| Message | Power Cost | Action |
+|---------|-----------|--------|
+| `SECURITY_TELEPORT:[target_id]` | 2.0% | TP to scan an avatar's location |
+| `SECURITY_SCAN:[target_id]` | 0.5% | Avatar scan completed |
+| `SECURITY_TARGET:[target_id]` | 1.0% | Initial laser targeting (Stage 1) |
+| `SECURITY_BLAST:[target_id]` | 5.0% | Full security blast (Stage 2) |
+
+Eye Security has two stages (confirmed from Eye Security session references):
+- **Stage 1:** Laser targeting — initial lock-on, small power cost
+- **Stage 2:** Massive blast — primary security response, significant power cost
+
+### 4.13 Charge Status Broadcast Format
+
+While charging, drone broadcasts status once per minute:
+- Format: `CHARGE_STATUS:[drone_uuid]:[current_power]:[max_power]`
+- Example: `CHARGE_STATUS:d4f00f32-30f9-7c82-1cc1-298cc7662b0c:45:100`
+- **Dock should IGNORE this message** — it is for the Control Panel only
+- Dock Config Script message filter: only responds to `DOCK:`-prefixed commands, `REQUEST_HOME_COORDINATES`, `STATUS`, `PING`, `COORDS`
+
+### 4.14 State Persistence
+
+Power level persists through script resets via linkset data:
+```lsl
+// Save:
+llLinksetDataWrite("current_power", (string)current_power);
+// Restore in state_entry():
+string saved = llLinksetDataRead("current_power");
+if (saved != "") { current_power = (float)saved; }
+```
+
+### 4.15 RP_MODE Power Output
+
+When `RP_MODE = YES`, power messages use emote format:
+```
+/me emergency power mode activated - speed reduced, power consumption doubled
+/me connecting to charging station... initiating power transfer
+/me fully charged - resuming patrol
+```
+
+When `RP_MODE = NO`, all operational power messages are suppressed. Critical errors always display regardless of RP_MODE.
+
+
+---
+
