@@ -1077,3 +1077,122 @@ Cardinal direction mapping:
 
 ---
 
+## 7. Security System
+
+> **Status:** Designed and power costs wired into Power Script v2.3.0. Full Security and Scan scripts are planned for Phase 3. Access list structure is defined. Eye Security integration (laser targeting) is confirmed planned but not yet implemented.
+
+### 7.1 Access Control Hierarchy
+
+Avatars are evaluated in priority order. Higher priority = processed first.
+
+| Priority | Class | Storage | Notes |
+|----------|-------|---------|-------|
+| 1 | **Owner** | `llGetOwner()` (live check) | Never stored; always checked at runtime |
+| 2 | **Admin** | `llLinksetData("admin_list")` | Pipe-delimited UUIDs |
+| 3 | **Group** | `llLinksetData("security_group")` | Single group UUID; `llSameGroup()` check |
+| 4 | **Guest** | `llLinksetData("guest_list")` | Permanent approval |
+| 5 | **Temp Guest** | `llLinksetData("temp_guest_list")` | Cleared when avatar leaves region |
+| 6 | **Banned** | `llLinksetData("banned_list")` | Permanent ban; triggers security response |
+| 7 | **Unknown** | Not stored until decision | Full scan; triggers admin notification |
+
+### 7.2 Security Lists (LLD Keys)
+
+| List | Key | Format |
+|------|-----|--------|
+| Admin list | `admin_list` | Pipe-delimited UUIDs: `"uuid1\|uuid2\|uuid3"` |
+| Guest list | `guest_list` | Pipe-delimited UUIDs |
+| Temp Guest list | `temp_guest_list` | Pipe-delimited UUIDs; purged on region leave |
+| Banned list | `banned_list` | Pipe-delimited UUIDs |
+| Security group | `security_group` | Single group UUID |
+
+### 7.3 Power Costs for Security Actions
+
+| Action | Power Cost | Notes |
+|--------|-----------|-------|
+| Owner/Admin/Group/Guest identification | 1.0% | Identification only |
+| Banned user detection | 0.5% | Quick detection, response triggered |
+| Unknown avatar full scan | 1.0% + (0.3% × script count) | Script count = scripts on avatar |
+| Avatar scan (Power Script flat rate) | 0.5% (`AVATAR_SCAN_COST`) | Used in v2.3.0 simplified model |
+| Security TP to avatar location | 2.0% (`TP_TELEPORT_COST`) | Per TP operation |
+| Laser targeting (Stage 1) | 1.0% (`LASER_TARGET_COST`) | Initial lock-on |
+| Laser blast (Stage 2) | 5.0% (`LASER_BLAST_COST`) | Full security response |
+
+### 7.4 Eye Security Integration (Two-Stage System)
+
+The Eye Security system (a separate integrated object) provides two stages of response to banned avatars:
+
+- **Stage 1 — Laser Target:** Initial lock-on; small power cost (1.0%); visual targeting effect
+- **Stage 2 — Massive Blast:** Full security blast; significant power cost (5.0%); major visual effect
+
+The Power Script listens for these messages from the Eye Security system:
+
+```lsl
+// Power Script listener for Eye Security:
+"SECURITY_TELEPORT:[target_id]"  → deduct 2.0%
+"SECURITY_SCAN:[target_id]"      → deduct 0.5%
+"SECURITY_TARGET:[target_id]"    → deduct 1.0%
+"SECURITY_BLAST:[target_id]"     → deduct 5.0%
+```
+
+### 7.5 Admin Notification Format
+
+When an unknown avatar is detected:
+```
+Security Alert: Unknown Avatar
+Name: [DisplayName]
+Profile: secondlife:///app/agent/[UUID]/about
+Location: [Region] ([X], [Y], [Z])
+
+[PERMANENT] [TEMPORARY] [BAN]
+```
+
+Admin response buttons:
+- **PERMANENT** — adds avatar to permanent guest list
+- **TEMPORARY** — adds to temp guest list (cleared when avatar leaves region)
+- **BAN** — adds to banned list
+
+### 7.6 Warning / Ejection System
+
+- Minimum warning time: **10 seconds**
+- Available presets: 10s, 20s, 30s, or custom (user-specified, min 10s)
+- After warning timer: ejection or ban action executes
+
+### 7.7 Detection Persistence Rules
+
+| List | Persistence |
+|------|------------|
+| Admin / Guest / Banned | Permanent — survives resets via `llLinksetData` |
+| Temp Guest | Cleared when avatar is detected leaving the region |
+| Scanned cache | Purged hourly OR when avatar leaves region |
+
+### 7.8 RP_MODE Security Output
+
+When `RP_MODE: YES`:
+- Security events output as `/me` emotes on local channel 0
+- Examples: `/me detects unknown presence`, `/me initiating security scan`
+- No raw debug output in local chat
+
+When `RP_MODE: NO`:
+- `llOwnerSay()` debug output only (owner-visible only)
+- No public chat messages
+
+### 7.9 Security TP System
+
+When a security TP is required (scanning a suspicious avatar at their location):
+1. Power Script deducts `TP_TELEPORT_COST` (2.0%)
+2. Movement Script TPs drone to avatar location
+3. Security scan performed
+4. Power Script deducts `AVATAR_SCAN_COST` (0.5%)
+5. Movement Script TPs drone back to last patrol position (3-second delay before `MOVEMENT_STARTED`)
+
+This TP pattern uses the same fix as the resume TP: stop timer, execute TP, wait 3 seconds.
+
+### 7.10 Future: ID Card System (Planned)
+
+- Optional attachment for pre-authorized visitors
+- Broadcasts on security channel when entering monitored zone — auto-approves without full scan
+- Reduces power cost for pre-authorized avatars
+- Eliminates admin notification for known trusted visitors
+
+---
+
