@@ -869,3 +869,211 @@ When Power Script sends `NORMAL_MODE`:
 
 ---
 
+## 6. Dock System
+
+### 6.1 Design Principles
+
+- One dock pairs with one drone (one-to-one, never shared)
+- Pairing is owner-validated (only pairs with objects that have the same owner)
+- Dock provides its own coordinates dynamically — no hardcoded HOME in the drone notecard
+- All dock-drone communication uses the unique calculated `comm_channel`
+- Dock communicates region-wide (`llRegionSay`) — distance doesn't break the connection
+
+### 6.2 Dock Object Structure
+
+The dock linkset contains one special child prim:
+
+| Prim Name | Purpose |
+|-----------|---------|
+| `Drone_Home` | Defines exact docking target position and orientation. Always uses `0, 0, Z` rotation — no X or Y tilt. |
+
+**Physical offset:** Drone center sits **0.10075m** from Drone_Home prim center (Y-axis in local space).
+
+Dock test positions observed in development:
+- Drone: `<103.50000, 144.00000, 1500.31970>`
+- Drone_Home prim: `<103.39925, 143.89925, 1500.31970>` (offset 0.10075m)
+
+### 6.3 Dock Config Script (v1.5.0)
+
+**Responsibilities:**
+- Listens on calculated `comm_channel` for drone requests
+- Responds to `REQUEST_HOME_COORDINATES` with current Drone_Home prim position and rotation
+- Message filtering — silently ignores unrecognized messages
+- RP_MODE awareness: when drone sets `RP_MODE: NO`, dock suppresses operational output
+- On owner touch (when paired): privately displays `comm_channel` to owner via `llRegionSayTo(llGetOwner(), 0, ...)`
+
+**Version history:**
+
+| Version | Key Change |
+|---------|-----------|
+| v1.2.0 | Region-wide communication, basic command handling |
+| v1.3.0 | `is_dock_message()` filter — silently ignores unknown messages (e.g., `CHARGE_STATUS`) |
+| v1.4.0 | Owner touch shows channel privately; post-pairing instructions |
+| v1.5.0 | RP_MODE listening; `drone_rp_mode` variable; `dock_output()` for filtered output; persistent RP storage |
+
+**Commands recognized (v1.3.0+):**
+
+| Command | Response |
+|---------|----------|
+| `REQUEST_HOME_COORDINATES` | Broadcasts `HOME_COORDINATES:<pos>\|<rot>` on `comm_channel` |
+| `STATUS` / `DOCK:STATUS` | Status report |
+| `PING` | `PONG` |
+| `DOCK:PING` | `DOCK:PONG` |
+| `COORDS` / `DOCK:COORDS` | `DOCK:CURRENT_COORDS:<pos>` |
+| `RP_MODE:YES` or `RP_MODE:NO` | Stored; adjusts dock output filtering immediately |
+
+**Silent ignore list:** `CHARGE_STATUS`, `BATTERY:`, and anything not prefixed with `DOCK:` or not in the legacy command list.
+
+**RP_MODE output rules (v1.5.0):**
+- `dock_output()` function: when `drone_rp_mode == "NO"`, suppresses operational messages
+- Critical messages (pairing events, errors) always display regardless of RP_MODE
+
+**Variables stored in linkset data (dock side):**
+- `paired_drone_uuid` — UUID of paired drone
+- `comm_channel` — calculated unique channel
+- `drone_home_coords` — last known Drone_Home position
+- `rp_mode` — received RP_MODE from drone (persists across resets)
+
+### 6.4 Dock Pairing Script (v1.4.0)
+
+**Responsibilities:**
+- Owner touches dock → dock enters pairing mode for 60 seconds
+- Broadcasts ping to nearby drones on channel 0 (public)
+- Drone's Pairing Script responds with its UUID
+- Calculates unique `comm_channel` from UUID hash
+- Sends Drone_Home prim position and rotation to drone
+- Saves pairing data to linkset data on both sides
+- Admin listener on calculated channel: `reset` and `status` commands
+
+**Pairing process detail:**
+1. Owner touches dock
+2. Dock broadcasts: `DOCK_PAIRING:[dock_key]` on channel 0
+3. Nearby drone Pairing Script responds: `DRONE_PAIR:[drone_key]`
+4. Both sides validate owner UUIDs match (no cross-owner pairing)
+5. Unique `comm_channel` calculated from drone UUID hash
+6. Drone_Home prim position and rotation sent to drone
+7. Pairing data saved to linkset data on both sides
+8. Pairing Scripts intended to delete themselves on success (disabled in test builds)
+9. 1-minute timeout on dock side — but script persists to allow retry
+
+**Version history:**
+
+| Version | Key Change |
+|---------|-----------|
+| v1.1.0 | Basic pairing, finds Drone_Home prim, sends coordinates |
+| v1.2.0 | `pairing_completed` flag prevents re-pairing; self-delete disabled for testing |
+| v1.4.0 | Admin listener on calculated channel; `reset` clears all linkset data; `status` reports pairing state |
+
+**Why v1.4.0 was needed:**
+- Linkset data survives script resets — earlier versions blocked re-pairing permanently
+- Fix: Admin listener always set up on calculated channel regardless of pairing state
+- `reset` command: `llLinksetDataDelete()` clears all stored pairing data
+
+### 6.5 Channel Architecture
+
+```lsl
+// Unique comm_channel calculation:
+integer comm_channel = (integer)("0x" + llGetSubString((string)llGetKey(), 0, 6)) * -1;
+```
+
+Example results: `-381513550` and `-233798746`
+
+| Channel | Used For |
+|---------|----------|
+| `0` (public) | Initial pairing broadcast (60 seconds only) |
+| `comm_channel` (calculated) | All ongoing drone/dock communication; admin commands |
+| `0` via `llRegionSayTo(owner)` | Dock privately tells owner the channel number on touch |
+
+### 6.6 Dock Communication Protocol
+
+**Coordinate request flow (at 25% power):**
+1. Power Script sends `POWER_CRITICAL` link message to Config Script
+2. Config Script sends on `comm_channel`: `REQUEST_HOME_COORDINATES:[drone_UUID]`
+3. Dock Config receives → logs `*** COORDINATE REQUEST RECEIVED ***`
+4. Dock broadcasts: `HOME_COORDINATES:<x,y,z>|<rotation_quaternion>`
+5. Config receives → calls `update_home_position(pos, rot, TRUE)` (emergency flag = TRUE, no movement)
+6. Config sends `UPDATE_HOME_COORDINATES` link message to Movement Script
+7. Movement Script updates `emergency_home_position` and `emergency_home_rotation`
+
+**Example coordinate message observed:**
+```
+HOME_COORDINATES:<101.10080, 143.86980, 1500.57500>|<0.00000, 0.70711, 0.00000, 0.70711>
+```
+
+**Config Script fix (v3.0.0+):** Coordinate update sends `UPDATE_HOME_COORDINATES` (not `HOME_POSITION_DATA`) so it doesn't accidentally trigger movement.
+
+**Emergency approach/departure messages:**
+
+| Message | Direction | Trigger |
+|---------|-----------|---------|
+| `DRONE_APPROACHING` | Drone → Dock | After TP to approach position |
+| `DRONE_DEPARTING` | Drone → Dock | After departure sequence begins |
+
+### 6.7 Docking Alignment — Rotation-Aware Approach
+
+The dock can be placed at any compass orientation. The drone calculates the correct approach using the Drone_Home prim's Z-axis rotation:
+
+```lsl
+// Extract Z-only rotation from dock:
+rotation convert_dock_rotation(rotation dock_rot)
+{
+    vector euler = llRot2Euler(dock_rot);
+    rotation converted = llEuler2Rot(<0.0, 0.0, euler.z>);
+    return converted;
+}
+
+// Calculate approach position (1m in front of dock):
+float z_radians = euler.z;
+vector approach_offset = <llCos(z_radians), llSin(z_radians), 0.0>;
+vector approach_pos = dock_home_position + approach_offset;
+```
+
+Cardinal direction mapping:
+| Dock Facing | euler.z | approach_offset |
+|-------------|---------|----------------|
+| East | 0° | `<1.0, 0.0, 0.0>` |
+| North | 90° | `<0.0, 1.0, 0.0>` |
+| West | 180° | `<-1.0, 0.0, 0.0>` |
+| South | 270° | `<0.0, -1.0, 0.0>` |
+| NE | 45° | `<0.707, 0.707, 0.0>` |
+
+### 6.8 Dock Pairing LLD Keys (Both Sides)
+
+**Dock side:**
+
+| Key | Content |
+|-----|---------|
+| `paired_drone_uuid` | UUID of paired drone |
+| `comm_channel` | Calculated unique channel |
+| `drone_home_coords` | Last known Drone_Home position |
+| `rp_mode` | RP_MODE received from drone |
+
+**Drone side:**
+
+| Key | Content |
+|-----|---------|
+| `paired_dock_uuid` | UUID of paired dock |
+| `dock_channel` | Calculated `comm_channel` |
+| `home_position` | Vector string: dock Drone_Home position |
+| `home_rotation` | Rotation string: dock Drone_Home orientation |
+
+### 6.9 Config Script Bugs Fixed (Related to Dock)
+
+**Double-click to start bug (v3.0.0 → v3.0.1):**
+- Cause: `patrol_active` not explicitly set to `FALSE` after pairing completion
+- Fix: Added `patrol_active = FALSE;` in Config Script pairing completion handler
+
+**Copied drone resumes at original's position:**
+- Cause: Linkset data from original drone persists in the copy
+- Fix: Send `CLEAR_SAVED_STATE` link message after successful pairing; Movement Script clears state
+
+### 6.10 Phase 2: Planned Dock Enhancements
+
+**Battery pairing:** Battery object pairs to dock separately from drone. Dock mediates between drone power needs and battery state.
+
+**Control Panel pairing:** Control Panel pairs to dock to receive the `comm_channel`. Then listens on that channel for status broadcasts from the drone.
+
+**Proximity docking (planned):** When power < 25% AND distance to dock < 20m, initiate smooth approach instead of emergency TP. Replaces the abrupt TP-home with a graceful approach.
+
+---
+
